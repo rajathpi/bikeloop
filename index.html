@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>Loop</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#111418; --panel:#1a1f26; --line:#2b323c;
+    --fg:#eef2f7; --muted:#93a0b4; --accent:#4ade80; --accent-ink:#062b14;
+    --danger:#f87171;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--fg); overflow:hidden;
+    -webkit-text-size-adjust:100%;
+  }
+  #map{position:absolute; inset:0 0 auto 0; height:100%; background:#0b0e11}
+  .leaflet-container{background:#0b0e11}
+
+  /* ---------- top bar ---------- */
+  #top{
+    position:absolute; z-index:600; top:0; left:0; right:0;
+    display:flex; align-items:center; gap:8px;
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;
+    background:linear-gradient(180deg,rgba(17,20,24,.92),rgba(17,20,24,0));
+    pointer-events:none;
+  }
+  #top > *{pointer-events:auto}
+  .brand{font-weight:650; letter-spacing:.02em; font-size:16px}
+  .brand span{color:var(--accent)}
+  .spacer{flex:1}
+  .icon-btn{
+    width:38px;height:38px;border-radius:11px;border:1px solid var(--line);
+    background:var(--panel); color:var(--fg); font-size:17px; line-height:1;
+    display:grid;place-items:center; cursor:pointer;
+  }
+  .icon-btn:active{transform:scale(.95)}
+
+  /* ---------- bottom sheet ---------- */
+  #sheet{
+    position:absolute; z-index:600; left:0; right:0; bottom:0;
+    background:var(--panel); border-top:1px solid var(--line);
+    border-radius:18px 18px 0 0;
+    padding:14px 14px calc(14px + var(--safe-b));
+    box-shadow:0 -12px 40px rgba(0,0,0,.45);
+    max-height:72%; overflow-y:auto;
+  }
+  .row{display:flex; align-items:center; gap:8px}
+  .chips{display:flex; gap:7px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{
+    flex:0 0 auto; padding:8px 13px; border-radius:999px;
+    border:1px solid var(--line); background:transparent; color:var(--muted);
+    font-size:14px; font-weight:550; cursor:pointer; white-space:nowrap;
+  }
+  .chip[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+  .go{
+    width:100%; margin-top:11px; padding:14px; border:0; border-radius:13px;
+    background:var(--accent); color:var(--accent-ink);
+    font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .go:disabled{opacity:.55; cursor:default}
+  .hint{color:var(--muted); font-size:12.5px; margin:9px 2px 0; text-align:center}
+  .hint b{color:var(--fg); font-weight:600}
+
+  /* ---------- results ---------- */
+  #results{margin-top:12px; display:none}
+  .res-head{
+    display:flex; align-items:baseline; gap:8px; margin:0 2px 9px;
+    font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;
+  }
+  .res-head button{
+    margin-left:auto; background:none; border:0; color:var(--accent);
+    font-size:12.5px; font-weight:650; cursor:pointer; text-transform:none; letter-spacing:0;
+  }
+  .card{
+    display:flex; align-items:center; gap:11px; width:100%;
+    padding:11px 12px; margin-bottom:8px; text-align:left;
+    background:#161b22; border:1px solid var(--line); border-radius:13px;
+    color:var(--fg); cursor:pointer;
+  }
+  .card[aria-selected="true"]{border-color:var(--accent); background:#17241c}
+  .swatch{width:9px; height:34px; border-radius:5px; flex:0 0 auto}
+  .card .km{font-size:17px; font-weight:700; letter-spacing:-.01em}
+  .card .sub{font-size:12.5px; color:var(--muted); margin-top:1px}
+  .card .off{margin-left:auto; font-size:12px; color:var(--muted); text-align:right}
+  .actions{display:flex; gap:8px; margin-top:4px}
+  .actions button{
+    flex:1; padding:12px; border-radius:12px; border:1px solid var(--line);
+    background:#161b22; color:var(--fg); font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .actions button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+  .actions button:disabled{opacity:.5}
+
+  /* ---------- modal ---------- */
+  .modal{
+    position:absolute; inset:0; z-index:900; display:none;
+    place-items:center; padding:20px; background:rgba(8,10,13,.82);
+  }
+  .modal.open{display:grid}
+  .modal-box{
+    width:100%; max-width:420px; background:var(--panel);
+    border:1px solid var(--line); border-radius:16px; padding:20px;
+    max-height:86%; overflow-y:auto;
+  }
+  .modal h2{margin:0 0 6px; font-size:18px}
+  .modal p{margin:0 0 14px; color:var(--muted); font-size:13.5px}
+  .modal a{color:var(--accent)}
+  .modal input{
+    width:100%; padding:12px; border-radius:11px; border:1px solid var(--line);
+    background:#0f1319; color:var(--fg); font-size:14px; font-family:ui-monospace,monospace;
+  }
+  .modal .go{margin-top:12px}
+  .link-btn{
+    display:block; width:100%; margin-top:9px; background:none; border:0;
+    color:var(--muted); font-size:13px; cursor:pointer;
+  }
+  .err{color:var(--danger); font-size:13px; margin-top:10px; display:none}
+
+  .toast{
+    position:absolute; z-index:1000; left:50%; bottom:calc(22px + var(--safe-b));
+    transform:translateX(-50%); background:#0f1319; border:1px solid var(--line);
+    color:var(--fg); padding:11px 16px; border-radius:11px; font-size:13.5px;
+    opacity:0; transition:opacity .2s; pointer-events:none; max-width:88vw; text-align:center;
+  }
+  .toast.show{opacity:1}
+
+  .spin{
+    width:15px;height:15px;border:2px solid rgba(6,43,20,.35);border-top-color:var(--accent-ink);
+    border-radius:50%; animation:sp .7s linear infinite; display:inline-block; vertical-align:-2px; margin-right:7px;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="top">
+  <div class="brand">Loop<span>.</span></div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="locateBtn" title="Use my location">◎</button>
+  <button class="icon-btn" id="setupBtn" title="Settings">⚙</button>
+</div>
+
+<div id="sheet">
+  <div class="chips" id="chips"></div>
+  <button class="go" id="findBtn">Find loops</button>
+  <div class="hint" id="hint">Tap the map to move your start point.</div>
+
+  <div id="results">
+    <div class="res-head">
+      <span id="resCount"></span>
+      <button id="moreBtn">Try different ones</button>
+    </div>
+    <div id="cards"></div>
+    <div class="actions">
+      <button id="gpxBtn">Save GPX</button>
+      <button id="shareBtn" class="primary">Send to phone app</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="setup">
+  <div class="modal-box">
+    <h2>One-time setup</h2>
+    <p>
+      Loop uses <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice</a>
+      to build routes. Sign up (free, no card), copy your API key, and paste it below.
+      It's stored only on this device.
+    </p>
+    <input id="keyInput" type="text" placeholder="Paste your ORS API key" autocomplete="off" spellcheck="false">
+    <button class="go" id="saveKey">Save &amp; start</button>
+    <button class="link-btn" id="closeSetup">Cancel</button>
+    <div class="err" id="setupErr"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  const API = 'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson';
+  const DISTANCES = [10, 20, 30, 50, 75, 100];
+  const COLORS = ['#4ade80','#60a5fa','#f472b6','#fbbf24','#a78bfa','#2dd4bf'];
+  const MAX_KM = 100;                       // ORS hard cap for round trips
+  const store = {
+    get key(){ return localStorage.getItem('ors_key') || ''; },
+    set key(v){ localStorage.setItem('ors_key', v); },
+    get home(){ try { return JSON.parse(localStorage.getItem('home')); } catch { return null; } },
+    set home(v){ localStorage.setItem('home', JSON.stringify(v)); },
+    get dist(){ return +localStorage.getItem('dist') || 50; },
+    set dist(v){ localStorage.setItem('dist', v); },
+  };
+
+  let target = store.dist;
+  let home = store.home || { lat: 59.3293, lng: 18.0686 };  // Stockholm until we know better
+  let routes = [];        // {km, ascent, coords, layer, color, seed}
+  let selected = 0;
+  let seedBase = 0;
+
+  /* ---------------- map ---------------- */
+  const map = L.map('map', { zoomControl:false, attributionControl:false })
+               .setView([home.lat, home.lng], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+  L.control.attribution({ prefix:false, position:'topright' })
+   .addAttribution('&copy; OpenStreetMap | routes by openrouteservice').addTo(map);
+
+  const homeMarker = L.marker([home.lat, home.lng], { draggable:true }).addTo(map);
+  homeMarker.on('dragend', () => setHome(homeMarker.getLatLng(), false));
+  map.on('click', e => setHome(e.latlng, false));
+
+  function setHome(ll, recenter = true) {
+    home = { lat:+ll.lat.toFixed(6), lng:+ll.lng.toFixed(6) };
+    store.home = home;
+    homeMarker.setLatLng(home);
+    if (recenter) map.setView(home, 13);
+    clearRoutes();
+  }
+
+  /* ---------------- ui helpers ---------------- */
+  const $ = id => document.getElementById(id);
+  let toastTimer;
+  function toast(msg, ms = 2600) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  // distance chips
+  const chips = $('chips');
+  DISTANCES.forEach(d => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = d + ' km';
+    b.setAttribute('aria-pressed', d === target);
+    b.onclick = () => {
+      target = d; store.dist = d;
+      [...chips.children].forEach(c => c.setAttribute('aria-pressed', c === b));
+      $('findBtn').textContent = `Find ${d} km loops`;
+    };
+    chips.appendChild(b);
+  });
+  $('findBtn').textContent = `Find ${target} km loops`;
+
+  /* ---------------- routing ---------------- */
+  function clearRoutes() {
+    routes.forEach(r => map.removeLayer(r.layer));
+    routes = []; $('results').style.display = 'none';
+  }
+
+  async function fetchLoop(seed, points) {
+    let res;
+    try {
+      res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Authorization': store.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coordinates: [[home.lng, home.lat]],
+          elevation: true,
+          instructions: false,
+          options: { round_trip: { length: target * 1000, points, seed } }
+        })
+      });
+    } catch {
+      // ORS omits CORS headers on error responses, so a rejected key reaches us
+      // as an opaque network failure rather than a readable 403.
+      const err = new Error('network');
+      err.network = true;
+      throw err;
+    }
+    if (!res.ok) {
+      const body = await res.text();
+      const err = new Error(body.slice(0, 300));
+      err.status = res.status;
+      throw err;
+    }
+    const gj = await res.json();
+    const f = gj.features && gj.features[0];
+    if (!f) throw new Error('empty response');
+    return {
+      seed,
+      coords: f.geometry.coordinates,                    // [lon,lat,ele]
+      km: f.properties.summary.distance / 1000,
+      ascent: Math.round(f.properties.ascent ?? f.properties.summary.ascent ?? 0),
+    };
+  }
+
+  async function findRoutes() {
+    if (!store.key) { openSetup(); return; }
+    if (target > MAX_KM) { toast(`openrouteservice caps loops at ${MAX_KM} km`); return; }
+
+    clearRoutes();
+    const btn = $('findBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>Building routes…';
+
+    // vary both seed and waypoint count so the shapes differ, not just the direction
+    const combos = [];
+    for (let i = 0; i < 6; i++) combos.push({ seed: seedBase + i, points: 3 + (i % 3) });
+    seedBase += 6;
+
+    const settled = await Promise.allSettled(combos.map(c => fetchLoop(c.seed, c.points)));
+    const ok = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
+    const bad = settled.find(s => s.status === 'rejected');
+
+    btn.disabled = false;
+    btn.textContent = `Find ${target} km loops`;
+
+    if (!ok.length) return handleError(bad && bad.reason);
+
+    // closest to the requested distance first — ORS round trips are approximate
+    ok.sort((a, b) => Math.abs(a.km - target) - Math.abs(b.km - target));
+
+    routes = ok.slice(0, 5).map((r, i) => {
+      const color = COLORS[i % COLORS.length];
+      const latlngs = r.coords.map(c => [c[1], c[0]]);
+      const layer = L.polyline(latlngs, { color, weight:4, opacity:.35 }).addTo(map);
+      layer.on('click', () => select(i));
+      return { ...r, color, layer, latlngs };
+    });
+
+    renderCards();
+    select(0);
+    $('results').style.display = 'block';
+    if (bad) toast(`${routes.length} of 6 routes came back`);
+  }
+
+  function handleError(err) {
+    const status = err && err.status;
+    if (err && err.network) {
+      toast('Could not reach openrouteservice — usually a wrong API key, sometimes no signal', 5000);
+      openSetup(); return;
+    }
+    if (status === 401 || status === 403) { toast('That API key was rejected'); openSetup(); return; }
+    if (status === 429) { toast('Rate limit hit — wait a minute and try again', 4000); return; }
+    const msg = (err && err.message) || '';
+    if (/2010|point.*not.*found|routable/i.test(msg))
+      toast('No cycling roads near that start point — move the pin', 4200);
+    else if (/distance|exceed|limit/i.test(msg))
+      toast(`Too far — openrouteservice caps loops at ${MAX_KM} km`, 4200);
+    else
+      toast('Routing failed. Try a different distance or start point.', 4200);
+  }
+
+  function renderCards() {
+    const wrap = $('cards');
+    wrap.innerHTML = '';
+    $('resCount').textContent = `${routes.length} loops near ${target} km`;
+    routes.forEach((r, i) => {
+      const off = r.km - target;
+      const card = document.createElement('button');
+      card.className = 'card';
+      card.setAttribute('aria-selected', i === selected);
+      card.innerHTML = `
+        <span class="swatch" style="background:${r.color}"></span>
+        <span>
+          <span class="km">${r.km.toFixed(1)} km</span>
+          <span class="sub">climb ${r.ascent} m</span>
+        </span>
+        <span class="off">${off >= 0 ? '+' : ''}${off.toFixed(1)} km<br>vs target</span>`;
+      card.onclick = () => select(i);
+      wrap.appendChild(card);
+    });
+  }
+
+  function select(i) {
+    selected = i;
+    routes.forEach((r, j) => {
+      r.layer.setStyle({ opacity: j === i ? 1 : .3, weight: j === i ? 5 : 3 });
+      if (j === i) r.layer.bringToFront();
+    });
+    [...$('cards').children].forEach((c, j) => c.setAttribute('aria-selected', j === i));
+    map.fitBounds(routes[i].layer.getBounds(), { padding:[35, 35] });
+  }
+
+  /* ---------------- gpx ---------------- */
+  function buildGPX(r) {
+    // thin dense tracks — some apps and ORS itself choke on huge files
+    const step = Math.max(1, Math.ceil(r.coords.length / 2000));
+    const pts = r.coords.filter((_, i) => i % step === 0 || i === r.coords.length - 1);
+    const name = `${target}km loop (${r.km.toFixed(1)} km)`;
+    const body = pts.map(c =>
+      `<trkpt lat="${c[1].toFixed(6)}" lon="${c[0].toFixed(6)}">${c[2] != null ? `<ele>${c[2].toFixed(1)}</ele>` : ''}</trkpt>`
+    ).join('\n');
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Loop" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${name}</name></metadata>
+  <trk><name>${name}</name><trkseg>
+${body}
+  </trkseg></trk>
+</gpx>`;
+  }
+
+  const fileName = r => `loop-${target}km-${r.km.toFixed(1)}.gpx`;
+
+  $('gpxBtn').onclick = () => {
+    const r = routes[selected]; if (!r) return;
+    const blob = new Blob([buildGPX(r)], { type:'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName(r);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('GPX saved — open it in OsmAnd, Komoot or Ride with GPS');
+  };
+
+  $('shareBtn').onclick = async () => {
+    const r = routes[selected]; if (!r) return;
+    const file = new File([buildGPX(r)], fileName(r), { type:'application/gpx+xml' });
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      try { await navigator.share({ files:[file], title:`${r.km.toFixed(1)} km loop` }); }
+      catch (e) { if (e.name !== 'AbortError') toast('Sharing failed — use Save GPX instead'); }
+    } else {
+      toast('Sharing needs a phone browser — use Save GPX here', 3600);
+    }
+  };
+
+  $('moreBtn').onclick = findRoutes;
+  $('findBtn').onclick = findRoutes;
+
+  /* ---------------- location ---------------- */
+  $('locateBtn').onclick = () => {
+    if (!navigator.geolocation) return toast('This browser has no location support');
+    if (!window.isSecureContext) return toast('Location needs https — tap the map to set your start', 4200);
+    toast('Finding you…', 1500);
+    navigator.geolocation.getCurrentPosition(
+      p => { setHome({ lat:p.coords.latitude, lng:p.coords.longitude }); toast('Start point set to your location'); },
+      () => toast('Location denied — tap the map to set your start', 4000),
+      { enableHighAccuracy:true, timeout:10000 }
+    );
+  };
+
+  /* ---------------- setup modal ---------------- */
+  function openSetup() {
+    $('keyInput').value = store.key;
+    $('setup').classList.add('open');
+  }
+  $('setupBtn').onclick = openSetup;
+  $('closeSetup').onclick = () => $('setup').classList.remove('open');
+  $('saveKey').onclick = () => {
+    const v = $('keyInput').value.trim();
+    const err = $('setupErr');
+    if (v.length < 20) { err.textContent = 'That does not look like an ORS key.'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+    store.key = v;
+    $('setup').classList.remove('open');
+    toast('Key saved. Finding loops…', 1600);
+    findRoutes();
+  };
+
+  /* ---------------- boot ---------------- */
+  if (!store.key) openSetup();
+  else if (!store.home) $('locateBtn').click();
+
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
