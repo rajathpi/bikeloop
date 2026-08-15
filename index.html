@@ -400,26 +400,38 @@ ${body}
 
   const fileName = r => `loop-${target}km-${r.km.toFixed(1)}.gpx`;
 
-  $('gpxBtn').onclick = () => {
-    const r = routes[selected]; if (!r) return;
+  function saveGPX(r, note) {
     const blob = new Blob([buildGPX(r)], { type:'application/gpx+xml' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = fileName(r);
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('GPX saved — open it in OsmAnd, Komoot or Ride with GPS');
-  };
+    toast((note ? note + ' ' : 'Saved. ') + 'Tap the download notification and pick OsmAnd.', 6500);
+  }
+
+  $('gpxBtn').onclick = () => { const r = routes[selected]; if (r) saveGPX(r); };
 
   $('shareBtn').onclick = async () => {
     const r = routes[selected]; if (!r) return;
     const file = new File([buildGPX(r)], fileName(r), { type:'application/gpx+xml' });
+
+    // Chrome only shares file types on its own allowlist, and GPX is not reliably
+    // on it — worse, the rejection can arrive from share() even after canShare()
+    // returned true. Retrying with another MIME type inside the same tap is not an
+    // option either: the first share() spends the user activation. So any failure
+    // drops straight to a download, which always works.
     if (navigator.canShare && navigator.canShare({ files:[file] })) {
-      try { await navigator.share({ files:[file], title:`${r.km.toFixed(1)} km loop` }); }
-      catch (e) { if (e.name !== 'AbortError') toast('Sharing failed — use Save GPX instead'); }
-    } else {
-      toast('Sharing needs a phone browser — use Save GPX here', 3600);
+      try {
+        await navigator.share({ files:[file], title:`${r.km.toFixed(1)} km loop` });
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;               // backed out of the sheet — not a failure
+        saveGPX(r, `Android refused the share (${e.name}), so it's saved instead.`);
+        return;
+      }
     }
+    saveGPX(r, 'This browser will not share files, so it\'s saved instead.');
   };
 
   $('moreBtn').onclick = findRoutes;
