@@ -1,6 +1,6 @@
 // Minimal shell cache so Loop opens instantly and survives a flaky signal.
 // Route generation and map tiles always need the network.
-const CACHE = 'loop-v2';
+const CACHE = 'loop-v3';
 const SHELL = [
   './',
   './index.html',
@@ -41,7 +41,11 @@ self.addEventListener('fetch', e => {
 
   if (isAppCode) {
     e.respondWith(
-      fetch(request)
+      // cache:'no-cache' forces revalidation with the server. Without it this is
+      // network-first in name only: GitHub Pages sends max-age on HTML, so a plain
+      // fetch() is served from the HTTP cache and a shipped fix can take ten
+      // minutes to reach an installed device.
+      fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then(res => {
           if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(request, copy)); }
           return res;
