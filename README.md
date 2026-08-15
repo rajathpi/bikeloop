@@ -8,6 +8,11 @@ or iOS home screen as a standalone app.
 
 **Live:** https://rajathpi.github.io/bikeloop
 
+![The Loop interface](assets/interface.svg)
+
+<sup>Interface illustration, not a screenshot — the loops drawn here are decorative.
+Open the live app to see real routes on real roads.</sup>
+
 ## Why
 
 Google Maps can route between points you place yourself, but it has no way to say
@@ -39,6 +44,21 @@ Notes and limits:
   to choose from rather than one.
 - GPX output is thinned to 2000 points, which keeps files small enough for apps and
   bike computers that choke on dense tracks.
+
+## Replacing the illustration with a real demo
+
+The illustration above is a placeholder. To swap in a recording of the app actually
+working, drop the file at `assets/demo.gif` and change the image line near the top of
+this README to point at it.
+
+On Android: swipe down twice for Quick Settings, tap **Screen record**, open Loop, run
+one search, tap through a couple of loops, stop the recording. Convert the resulting
+MP4 with any of these:
+
+    ffmpeg -i demo.mp4 -vf "fps=12,scale=420:-1:flags=lanczos" -loop 0 assets/demo.gif
+
+Keep it under ~10 MB so GitHub renders it inline, and trim to the interesting 8–12
+seconds — the search, the results appearing, and one route being selected.
 
 ## Stack
 
