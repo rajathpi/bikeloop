@@ -54,7 +54,8 @@
     border-radius:18px 18px 0 0;
     padding:14px 14px calc(14px + var(--safe-b));
     box-shadow:0 -12px 40px rgba(0,0,0,.45);
-    max-height:72%; overflow-y:auto;
+    /* The map is the point — five results must never push it to a sliver. */
+    max-height:54%; overflow-y:auto;
   }
   .row{display:flex; align-items:center; gap:8px}
   .chips{display:flex; gap:7px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none}
@@ -86,7 +87,7 @@
   }
   .card{
     display:flex; align-items:center; gap:11px; width:100%;
-    padding:11px 12px; margin-bottom:8px; text-align:left;
+    padding:8px 12px; margin-bottom:6px; text-align:left;
     background:#161b22; border:1px solid var(--line); border-radius:13px;
     color:var(--fg); cursor:pointer;
   }
@@ -256,7 +257,7 @@
   /* ---------------- routing ---------------- */
   function clearRoutes() {
     routes.forEach(r => { map.removeLayer(r.casing); map.removeLayer(r.line); });
-    routes = []; $('results').style.display = 'none';
+    routes = []; $('results').style.display = 'none'; $('hint').style.display = '';
   }
 
   async function fetchLoop(seed, points) {
@@ -338,6 +339,7 @@
     renderCards();
     select(0);
     $('results').style.display = 'block';
+    $('hint').style.display = 'none';        // the results are the guidance now
     if (bad) toast(`${routes.length} of 6 routes came back`);
   }
 
